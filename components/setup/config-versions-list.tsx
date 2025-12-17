@@ -1,10 +1,12 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Calendar, Settings } from "lucide-react"
 import { ConfigVersionForm } from "./config-version-form"
+import { createClient } from "@/lib/supabase/client"
 
 interface ConfigVersion {
   id: string
@@ -31,6 +33,25 @@ interface ConfigVersionsListProps {
 export function ConfigVersionsList({ configVersions, userId }: ConfigVersionsListProps) {
   const [isCreating, setIsCreating] = useState(configVersions.length === 0)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const router = useRouter()
+  const supabase = createClient()
+
+  const handleDelete = async (configId: string, effectiveDate: string) => {
+    const confirmed = confirm(
+      `⚠️ Esta configuração já foi usada em registros passados.\n\nAo excluí-la, esses registros passarão a utilizar a configuração de vigência mais próxima e coerente.\n\nDeseja continuar?`,
+    )
+
+    if (!confirmed) return
+
+    const { error } = await supabase.from("config_versions").delete().eq("id", configId)
+
+    if (error) {
+      alert("Erro ao excluir configuração: " + error.message)
+      return
+    }
+
+    router.refresh()
+  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("pt-BR")
@@ -100,14 +121,25 @@ export function ConfigVersionsList({ configVersions, userId }: ConfigVersionsLis
                         )}
                       </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setEditingId(config.id)}
-                      className="border-slate-700 text-slate-300 hover:bg-slate-800"
-                    >
-                      Editar
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingId(config.id)}
+                        className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(config.id, config.effective_date)}
+                        className="border-red-700/50 text-red-400 hover:bg-red-900/20"
+                      >
+                        Excluir
+                      </Button>
+                    </div>
+                    {/* */}
                   </div>
                 </CardHeader>
                 <CardContent>

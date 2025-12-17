@@ -75,13 +75,12 @@ export function ConfigVersionForm({ initialData, userId, onCancel }: ConfigVersi
         work_days_per_year: Number.parseInt(formData.work_days_per_year),
       }
 
-      if (initialData?.id) {
-        const { error } = await supabase.from("config_versions").update(dataToSave).eq("id", initialData.id)
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from("config_versions").insert(dataToSave)
-        if (error) throw error
-      }
+      const { error } = await supabase.from("config_versions").upsert(dataToSave, {
+        onConflict: "user_id,effective_date",
+        ignoreDuplicates: false,
+      })
+
+      if (error) throw error
 
       router.refresh()
       onCancel()
