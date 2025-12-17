@@ -34,27 +34,45 @@ export function RecordForm({ initialData, settings, userId }: RecordFormProps) {
     hours_working: initialData?.hours_working || "",
     received_in_app: initialData?.received_in_app || "",
     received_outside_app: initialData?.received_outside_app || "",
+    received_debit: initialData?.received_debit || "",
+    received_credit: initialData?.received_credit || "",
+    received_cash_pix: initialData?.received_cash_pix || "",
     personal_expenses: initialData?.personal_expenses || "",
     personal_expenses_description: initialData?.personal_expenses_description || "",
   })
 
+  const calculateNetAmounts = () => {
+    const debit = Number.parseFloat(formData.received_debit) || 0
+    const credit = Number.parseFloat(formData.received_credit) || 0
+    const cashPix = Number.parseFloat(formData.received_cash_pix) || 0
+
+    const debitFee = (debit * (settings?.debit_fee_percent || 1.99)) / 100
+    const creditFee = (credit * (settings?.credit_fee_percent || 3.99)) / 100
+
+    const netDebit = debit - debitFee
+    const netCredit = credit - creditFee
+    const totalNet = netDebit + netCredit + cashPix
+
+    return { netDebit, netCredit, totalNet, debitFee, creditFee }
+  }
+
   // Validate received amounts
   const validateReceivedAmounts = () => {
     const gross = Number.parseFloat(formData.gross_revenue) || 0
-    const inApp = Number.parseFloat(formData.received_in_app) || 0
-    const outside = Number.parseFloat(formData.received_outside_app) || 0
-    const total = inApp + outside
+    const { totalNet, debitFee, creditFee } = calculateNetAmounts()
 
-    if (total !== gross) {
-      const diff = Math.abs(total - gross)
-      if (diff > 0) {
-        setWarning(
-          `A soma dos valores recebidos (R$ ${total.toFixed(2)}) difere do faturamento bruto (R$ ${gross.toFixed(2)}). ` +
-            `Diferença de R$ ${diff.toFixed(2)}. ${total > gross ? "Pode indicar gorjeta recebida!" : "Verifique os valores."}`,
-        )
-      } else {
-        setWarning(null)
-      }
+    const debit = Number.parseFloat(formData.received_debit) || 0
+    const credit = Number.parseFloat(formData.received_credit) || 0
+    const cashPix = Number.parseFloat(formData.received_cash_pix) || 0
+    const totalReceived = debit + credit + cashPix
+
+    if (totalReceived > 0 && Math.abs(totalReceived - gross) > 0.01) {
+      const diff = Math.abs(totalReceived - gross)
+      setWarning(
+        `A soma dos valores recebidos (R$ ${totalReceived.toFixed(2)}) difere do faturamento bruto (R$ ${gross.toFixed(2)}). ` +
+          `Diferença de R$ ${diff.toFixed(2)}. ${totalReceived > gross ? "Pode indicar gorjeta recebida!" : "Verifique os valores."}` +
+          `\n\nTaxas: Débito R$ ${debitFee.toFixed(2)} | Crédito R$ ${creditFee.toFixed(2)} | Líquido Real: R$ ${totalNet.toFixed(2)}`,
+      )
     } else {
       setWarning(null)
     }
@@ -78,6 +96,9 @@ export function RecordForm({ initialData, settings, userId }: RecordFormProps) {
         hours_working: formData.hours_working ? Number.parseFloat(formData.hours_working) : null,
         received_in_app: Number.parseFloat(formData.received_in_app) || 0,
         received_outside_app: Number.parseFloat(formData.received_outside_app) || 0,
+        received_debit: Number.parseFloat(formData.received_debit) || 0,
+        received_credit: Number.parseFloat(formData.received_credit) || 0,
+        received_cash_pix: Number.parseFloat(formData.received_cash_pix) || 0,
         personal_expenses: Number.parseFloat(formData.personal_expenses) || 0,
         personal_expenses_description: formData.personal_expenses_description || null,
       }
@@ -216,50 +237,103 @@ export function RecordForm({ initialData, settings, userId }: RecordFormProps) {
 
       <Card className="border-slate-800 bg-slate-900/50">
         <CardHeader>
-          <CardTitle className="text-white">Formas de Recebimento</CardTitle>
-          <CardDescription className="text-slate-400">Como você recebeu o dinheiro hoje</CardDescription>
+          <CardTitle className="text-white">Pagamentos Recebidos</CardTitle>
+          <CardDescription className="text-slate-400">
+            Informe como você recebeu o dinheiro (as taxas serão descontadas automaticamente)
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="received_in_app" className="text-slate-200">
-                Recebido no app (cartão)
+              <Label htmlFor="received_debit" className="text-slate-200">
+                Valor recebido no débito (R$)
               </Label>
               <Input
-                id="received_in_app"
+                id="received_debit"
                 type="number"
                 step="0.01"
-                value={formData.received_in_app}
+                placeholder="0.00"
+                value={formData.received_debit}
                 onChange={(e) => {
-                  setFormData({ ...formData, received_in_app: e.target.value })
+                  setFormData({ ...formData, received_debit: e.target.value })
                   setTimeout(validateReceivedAmounts, 100)
                 }}
                 className="bg-slate-800 border-slate-700 text-white"
               />
+              {settings && <p className="text-xs text-slate-500">Taxa: {settings.debit_fee_percent}%</p>}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="received_outside_app" className="text-slate-200">
-                Recebido fora do app (dinheiro/pix)
+              <Label htmlFor="received_credit" className="text-slate-200">
+                Valor recebido no crédito (R$)
               </Label>
               <Input
-                id="received_outside_app"
+                id="received_credit"
                 type="number"
                 step="0.01"
-                value={formData.received_outside_app}
+                placeholder="0.00"
+                value={formData.received_credit}
                 onChange={(e) => {
-                  setFormData({ ...formData, received_outside_app: e.target.value })
+                  setFormData({ ...formData, received_credit: e.target.value })
                   setTimeout(validateReceivedAmounts, 100)
                 }}
                 className="bg-slate-800 border-slate-700 text-white"
               />
+              {settings && <p className="text-xs text-slate-500">Taxa: {settings.credit_fee_percent}%</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="received_cash_pix" className="text-slate-200">
+                Valor em dinheiro / PIX (R$)
+              </Label>
+              <Input
+                id="received_cash_pix"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={formData.received_cash_pix}
+                onChange={(e) => {
+                  setFormData({ ...formData, received_cash_pix: e.target.value })
+                  setTimeout(validateReceivedAmounts, 100)
+                }}
+                className="bg-slate-800 border-slate-700 text-white"
+              />
+              <p className="text-xs text-slate-500">Sem taxa</p>
             </div>
           </div>
+
+          {(formData.received_debit || formData.received_credit || formData.received_cash_pix) && (
+            <div className="p-4 bg-slate-700/30 rounded-lg border border-slate-700">
+              <h4 className="text-sm font-semibold text-slate-300 mb-2">Valores Líquidos (após taxas)</h4>
+              <div className="grid gap-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Débito líquido:</span>
+                  <span className="text-white font-semibold">R$ {calculateNetAmounts().netDebit.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Crédito líquido:</span>
+                  <span className="text-white font-semibold">R$ {calculateNetAmounts().netCredit.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Dinheiro/PIX:</span>
+                  <span className="text-white font-semibold">
+                    R$ {(Number.parseFloat(formData.received_cash_pix) || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-slate-600">
+                  <span className="text-slate-300 font-semibold">Total líquido real:</span>
+                  <span className="text-green-400 font-bold text-base">
+                    R$ {calculateNetAmounts().totalNet.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {warning && (
             <Alert className="bg-amber-500/10 border-amber-500/50">
               <AlertCircle className="h-4 w-4 text-amber-500" />
-              <AlertDescription className="text-amber-400 text-sm">{warning}</AlertDescription>
+              <AlertDescription className="text-amber-400 text-sm whitespace-pre-line">{warning}</AlertDescription>
             </Alert>
           )}
         </CardContent>

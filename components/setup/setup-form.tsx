@@ -29,6 +29,8 @@ export function SetupForm({ initialData, userId }: SetupFormProps) {
     app_fee_per_ride: initialData?.app_fee_per_ride || "1.50",
     monthly_car_wash: initialData?.monthly_car_wash || "25.00",
     avg_work_days_per_month: initialData?.avg_work_days_per_month || "26",
+    debit_fee_percent: initialData?.debit_fee_percent || "1.99",
+    credit_fee_percent: initialData?.credit_fee_percent || "3.99",
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,6 +50,8 @@ export function SetupForm({ initialData, userId }: SetupFormProps) {
         app_fee_per_ride: Number.parseFloat(formData.app_fee_per_ride),
         monthly_car_wash: Number.parseFloat(formData.monthly_car_wash),
         avg_work_days_per_month: Number.parseInt(formData.avg_work_days_per_month),
+        debit_fee_percent: Number.parseFloat(formData.debit_fee_percent),
+        credit_fee_percent: Number.parseFloat(formData.credit_fee_percent),
       }
 
       if (initialData) {
@@ -184,6 +188,43 @@ export function SetupForm({ initialData, userId }: SetupFormProps) {
                 className="bg-slate-800 border-slate-700 text-white"
                 required
               />
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-700">
+            <h3 className="text-lg font-semibold text-white mb-4">Taxas da Maquininha</h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="debit_fee_percent" className="text-slate-200">
+                  Taxa de débito (%)
+                </Label>
+                <Input
+                  id="debit_fee_percent"
+                  type="number"
+                  step="0.01"
+                  value={formData.debit_fee_percent}
+                  onChange={(e) => setFormData({ ...formData, debit_fee_percent: e.target.value })}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  required
+                />
+                <p className="text-xs text-slate-500">Ex: 1.99 para 1.99%</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="credit_fee_percent" className="text-slate-200">
+                  Taxa de crédito (%)
+                </Label>
+                <Input
+                  id="credit_fee_percent"
+                  type="number"
+                  step="0.01"
+                  value={formData.credit_fee_percent}
+                  onChange={(e) => setFormData({ ...formData, credit_fee_percent: e.target.value })}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  required
+                />
+                <p className="text-xs text-slate-500">Ex: 3.99 para 3.99%</p>
+              </div>
             </div>
           </div>
 
