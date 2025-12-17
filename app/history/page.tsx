@@ -15,13 +15,13 @@ export default async function HistoryPage() {
     redirect("/login")
   }
 
-  const { data: settings } = await supabase.from("user_settings").select("*").eq("user_id", user.id).single()
+  const { data: configVersions } = await supabase.from("config_versions").select("*").eq("user_id", user.id).limit(1)
 
-  if (!settings) {
+  if (!configVersions || configVersions.length === 0) {
     redirect("/setup")
   }
 
-  // Get all records
+  // Get all records with their calculated values
   const { data: records } = await supabase
     .from("daily_records")
     .select("*")
@@ -33,7 +33,7 @@ export default async function HistoryPage() {
       <HistoryHeader />
 
       <main className="container mx-auto p-4 md:p-6">
-        <HistoryList records={records || []} settings={settings} />
+        <HistoryList records={records || []} />
       </main>
     </div>
   )

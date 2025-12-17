@@ -15,6 +15,7 @@ import {
   Fuel,
   Wallet,
   AlertCircle,
+  Settings,
 } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
@@ -23,128 +24,14 @@ import { HistoryFilters } from "./history-filters"
 
 interface HistoryListProps {
   records: any[]
-  settings: any
 }
 
-function calculateRecordMetrics(record: any, settings: any) {
-  const fuelCost = (record.km_driven / settings.fuel_efficiency) * settings.gas_price
-  const maintenanceCost = record.km_driven * settings.maintenance_cost_per_km
-  const appFees = record.total_rides * settings.app_fee_per_ride
-  const carWashDaily = settings.monthly_car_wash / settings.avg_work_days_per_month
-
-  // Calculate payment machine fees
-  const debitFee = ((record.received_debit || 0) * (settings.debit_fee_percent || 0)) / 100
-  const creditFee = ((record.received_credit || 0) * (settings.credit_fee_percent || 0)) / 100
-  const paymentMachineFees = debitFee + creditFee
-
-  const totalOperationalCosts = fuelCost + maintenanceCost + appFees + carWashDaily + paymentMachineFees
-  const operationalNetProfit = record.gross_revenue - totalOperationalCosts
-
-  const personalExpenses = record.personal_expenses || 0
-  const realProfit = operationalNetProfit - personalExpenses
-
-  return {
-    fuelCost,
-    maintenanceCost,
-    appFees,
-    carWashDaily,
-    paymentMachineFees,
-    totalOperationalCosts,
-    operationalNetProfit,
-    personalExpenses,
-    realProfit,
-  }
-}
-
-function classifyDay(record: any, settings: any, monthRecords: any[]) {
-  const metrics = calculateRecordMetrics(record, settings)
-  const profitMargin = (metrics.operationalNetProfit / record.gross_revenue) * 100
-  const profitPerKm = metrics.operationalNetProfit / record.km_driven
-  const profitPerHour = record.hours_working ? metrics.operationalNetProfit / record.hours_working : null
-
-  // Calculate historical averages
-  let avgProfitPerKm = profitPerKm
-  let avgProfitPerHour = profitPerHour || 0
-  let avgProfitMargin = profitMargin
-
-  if (monthRecords.length > 1) {
-    const otherRecords = monthRecords.filter((r) => r.id !== record.id)
-    if (otherRecords.length > 0) {
-      avgProfitPerKm =
-        otherRecords.reduce((sum, r) => {
-          const m = calculateRecordMetrics(r, settings)
-          return sum + m.operationalNetProfit / r.km_driven
-        }, 0) / otherRecords.length
-
-      const recordsWithHours = otherRecords.filter((r) => r.hours_working)
-      if (recordsWithHours.length > 0) {
-        avgProfitPerHour =
-          recordsWithHours.reduce((sum, r) => {
-            const m = calculateRecordMetrics(r, settings)
-            return sum + m.operationalNetProfit / r.hours_working
-          }, 0) / recordsWithHours.length
-      }
-
-      avgProfitMargin =
-        otherRecords.reduce((sum, r) => {
-          const m = calculateRecordMetrics(r, settings)
-          return sum + (m.operationalNetProfit / r.gross_revenue) * 100
-        }, 0) / otherRecords.length
-    }
-  }
-
-  // Classification logic
-  let classification = "Médio"
-  const explanation = []
-
-  // Check profit per km
-  if (profitPerKm > avgProfitPerKm * 1.1) {
-    explanation.push("Lucro por km acima da média")
-  } else if (profitPerKm < avgProfitPerKm * 0.9) {
-    explanation.push("Lucro por km abaixo da média")
-  }
-
-  // Check profit per hour
-  if (profitPerHour && avgProfitPerHour) {
-    if (profitPerHour > avgProfitPerHour * 1.1) {
-      explanation.push("Produtividade por hora excelente")
-    } else if (profitPerHour < avgProfitPerHour * 0.9) {
-      explanation.push("Produtividade por hora baixa - muitas horas online sem retorno adequado")
-    }
-  }
-
-  // Check profit margin
-  if (profitMargin > avgProfitMargin * 1.1 || profitMargin >= 40) {
-    explanation.push("Margem de lucro excelente")
-  } else if (profitMargin < avgProfitMargin * 0.9 || profitMargin < 30) {
-    explanation.push("Margem de lucro baixa")
-  }
-
-  // Check fuel efficiency
-  const fuelCostPercent = (metrics.fuelCost / record.gross_revenue) * 100
-  if (fuelCostPercent > 25) {
-    explanation.push("Custo de combustível alto - considere ajustar estratégia")
-  } else if (fuelCostPercent < 15) {
-    explanation.push("Custo de combustível controlado")
-  }
-
-  // Final classification
-  if (profitMargin >= 40 && profitPerKm > avgProfitPerKm) {
-    classification = "Bom"
-  } else if (profitMargin < 30 || profitPerKm < avgProfitPerKm * 0.8) {
-    classification = "Ruim"
-  }
-
-  return {
-    classification,
-    explanation: explanation.length > 0 ? explanation.join(". ") + "." : "Desempenho dentro da média histórica.",
-  }
-}
-
-export function HistoryList({ records, settings }: HistoryListProps) {
+export function HistoryList({ records }: HistoryListProps) {
   const router = useRouter()
   const supabase = createClient()
-  const [filter, setFilter] = useState<"day" | "week" | "month" | "all">("all")
+  const [filter, setFilter] = useState<"day" | "week" | "month" | "all" | "custom">("all")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
 
   const filteredRecords = records.filter((record) => {
     const recordDate = new Date(record.record_date)
@@ -161,6 +48,13 @@ export function HistoryList({ records, settings }: HistoryListProps) {
       return recordDate >= weekAgo
     } else if (filter === "month") {
       return recordDate.getMonth() === today.getMonth() && recordDate.getFullYear() === today.getFullYear()
+    } else if (filter === "custom") {
+      if (!startDate || !endDate) return true
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      start.setHours(0, 0, 0, 0)
+      end.setHours(23, 59, 59, 999)
+      return recordDate >= start && recordDate <= end
     }
     return true
   })
@@ -178,6 +72,11 @@ export function HistoryList({ records, settings }: HistoryListProps) {
     }
 
     router.refresh()
+  }
+
+  const handleDateRangeChange = (start: string, end: string) => {
+    setStartDate(start)
+    setEndDate(end)
   }
 
   if (records.length === 0) {
@@ -210,7 +109,13 @@ export function HistoryList({ records, settings }: HistoryListProps) {
 
   return (
     <div className="space-y-6">
-      <HistoryFilters currentFilter={filter} onFilterChange={setFilter} />
+      <HistoryFilters
+        currentFilter={filter}
+        onFilterChange={setFilter}
+        startDate={startDate}
+        endDate={endDate}
+        onDateRangeChange={handleDateRangeChange}
+      />
 
       {filteredRecords.length === 0 ? (
         <Card className="border-slate-700 bg-slate-800/50 backdrop-blur">
@@ -223,20 +128,18 @@ export function HistoryList({ records, settings }: HistoryListProps) {
       ) : (
         <div className="space-y-8">
           {Object.entries(recordsByMonth).map(([monthYear, monthRecords]) => {
-            const monthlyGrossRevenue = monthRecords.reduce((sum, r) => sum + Number(r.gross_revenue), 0)
-            const monthlyKm = monthRecords.reduce((sum, r) => sum + Number(r.km_driven), 0)
-
             const monthlyTotals = monthRecords.reduce(
               (acc, r) => {
-                const metrics = calculateRecordMetrics(r, settings)
                 return {
-                  totalCosts: acc.totalCosts + metrics.totalOperationalCosts,
-                  operationalProfit: acc.operationalProfit + metrics.operationalNetProfit,
-                  personalExpenses: acc.personalExpenses + metrics.personalExpenses,
-                  realProfit: acc.realProfit + metrics.realProfit,
+                  grossRevenue: acc.grossRevenue + (Number(r.gross_revenue) || 0),
+                  totalCosts: acc.totalCosts + (Number(r.total_operational_costs) || 0),
+                  operationalProfit: acc.operationalProfit + (Number(r.operational_profit) || 0),
+                  personalExpenses: acc.personalExpenses + (Number(r.personal_expenses) || 0),
+                  realProfit: acc.realProfit + (Number(r.net_profit) || 0),
+                  km: acc.km + (Number(r.km_driven) || 0),
                 }
               },
-              { totalCosts: 0, operationalProfit: 0, personalExpenses: 0, realProfit: 0 },
+              { grossRevenue: 0, totalCosts: 0, operationalProfit: 0, personalExpenses: 0, realProfit: 0, km: 0 },
             )
 
             return (
@@ -246,7 +149,7 @@ export function HistoryList({ records, settings }: HistoryListProps) {
                   <div className="flex flex-wrap gap-3 text-sm">
                     <span className="text-slate-400">
                       Faturamento:{" "}
-                      <span className="text-green-400 font-semibold">R$ {monthlyGrossRevenue.toFixed(2)}</span>
+                      <span className="text-green-400 font-semibold">R$ {monthlyTotals.grossRevenue.toFixed(2)}</span>
                     </span>
                     <span className="text-slate-400">
                       Custos:{" "}
@@ -269,15 +172,31 @@ export function HistoryList({ records, settings }: HistoryListProps) {
                       </span>
                     </span>
                     <span className="text-slate-400">
-                      KM: <span className="text-blue-400 font-semibold">{monthlyKm.toFixed(1)}</span>
+                      KM: <span className="text-blue-400 font-semibold">{monthlyTotals.km.toFixed(1)}</span>
                     </span>
                   </div>
                 </div>
 
                 <div className="grid gap-4">
                   {monthRecords.map((record) => {
-                    const metrics = calculateRecordMetrics(record, settings)
-                    const { classification, explanation } = classifyDay(record, settings, monthRecords)
+                    const operationalProfit = Number(record.operational_profit) || 0
+                    const netProfit = Number(record.net_profit) || 0
+                    const totalCosts = Number(record.total_operational_costs) || 0
+
+                    // Simple classification based on stored values
+                    const profitMargin = record.gross_revenue > 0 ? (operationalProfit / record.gross_revenue) * 100 : 0
+                    const profitPerKm = record.km_driven > 0 ? operationalProfit / record.km_driven : 0
+
+                    let classification = "Médio"
+                    let explanation = "Desempenho dentro da média."
+
+                    if (profitMargin >= 40 && profitPerKm > 3) {
+                      classification = "Bom"
+                      explanation = "Excelente margem de lucro e rentabilidade por km rodado."
+                    } else if (profitMargin < 30 || profitPerKm < 2) {
+                      classification = "Ruim"
+                      explanation = "Margem de lucro baixa. Considere revisar estratégia ou custos."
+                    }
 
                     const classificationColors = {
                       Bom: { badge: "bg-green-500/20 text-green-400 border-green-500/50", icon: "text-green-400" },
@@ -344,7 +263,9 @@ export function HistoryList({ records, settings }: HistoryListProps) {
                                 <DollarSign className="h-4 w-4" />
                                 <span className="text-xs">Faturamento Bruto</span>
                               </div>
-                              <p className="text-lg font-bold text-green-400">R$ {record.gross_revenue.toFixed(2)}</p>
+                              <p className="text-lg font-bold text-green-400">
+                                R$ {Number(record.gross_revenue).toFixed(2)}
+                              </p>
                             </div>
 
                             <div className="space-y-1">
@@ -353,16 +274,18 @@ export function HistoryList({ records, settings }: HistoryListProps) {
                                 <span className="text-xs">Distância • Corridas</span>
                               </div>
                               <p className="text-lg font-bold text-white">
-                                {record.km_driven.toFixed(1)} km • {record.total_rides}
+                                {Number(record.km_driven).toFixed(1)} km • {record.total_rides}
                               </p>
                             </div>
 
                             <div className="space-y-1">
                               <div className="flex items-center gap-2 text-slate-400">
                                 <Fuel className="h-4 w-4" />
-                                <span className="text-xs">Preço Pago ao App</span>
+                                <span className="text-xs">Taxas do App</span>
                               </div>
-                              <p className="text-lg font-bold text-orange-400">R$ {metrics.appFees.toFixed(2)}</p>
+                              <p className="text-lg font-bold text-orange-400">
+                                R$ {Number(record.app_fees || 0).toFixed(2)}
+                              </p>
                             </div>
 
                             <div className="space-y-1">
@@ -370,9 +293,7 @@ export function HistoryList({ records, settings }: HistoryListProps) {
                                 <Wallet className="h-4 w-4" />
                                 <span className="text-xs">Custo Total</span>
                               </div>
-                              <p className="text-lg font-bold text-red-400">
-                                R$ {metrics.totalOperationalCosts.toFixed(2)}
-                              </p>
+                              <p className="text-lg font-bold text-red-400">R$ {totalCosts.toFixed(2)}</p>
                             </div>
                           </div>
 
@@ -383,9 +304,9 @@ export function HistoryList({ records, settings }: HistoryListProps) {
                                 <span className="text-xs">Lucro Líquido Op.</span>
                               </div>
                               <p
-                                className={`text-lg font-bold ${metrics.operationalNetProfit >= 0 ? "text-green-400" : "text-red-400"}`}
+                                className={`text-lg font-bold ${operationalProfit >= 0 ? "text-green-400" : "text-red-400"}`}
                               >
-                                R$ {metrics.operationalNetProfit.toFixed(2)}
+                                R$ {operationalProfit.toFixed(2)}
                               </p>
                             </div>
 
@@ -395,7 +316,7 @@ export function HistoryList({ records, settings }: HistoryListProps) {
                                 <span className="text-xs">Gastos Pessoais</span>
                               </div>
                               <p className="text-lg font-bold text-amber-400">
-                                R$ {metrics.personalExpenses.toFixed(2)}
+                                R$ {Number(record.personal_expenses || 0).toFixed(2)}
                               </p>
                             </div>
 
@@ -405,9 +326,9 @@ export function HistoryList({ records, settings }: HistoryListProps) {
                                 <span className="text-xs">Lucro Real</span>
                               </div>
                               <p
-                                className={`text-lg font-bold ${metrics.realProfit >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                                className={`text-lg font-bold ${netProfit >= 0 ? "text-emerald-400" : "text-red-400"}`}
                               >
-                                R$ {metrics.realProfit.toFixed(2)}
+                                R$ {netProfit.toFixed(2)}
                               </p>
                             </div>
 
@@ -418,7 +339,8 @@ export function HistoryList({ records, settings }: HistoryListProps) {
                                   <span className="text-xs">Horas Online • Trabalhadas</span>
                                 </div>
                                 <p className="text-lg font-bold text-blue-400">
-                                  {record.hours_online?.toFixed(1) || "0"}h • {record.hours_working?.toFixed(1) || "0"}h
+                                  {Number(record.hours_online || 0).toFixed(1)}h •{" "}
+                                  {Number(record.hours_working || 0).toFixed(1)}h
                                 </p>
                               </div>
                             )}
@@ -426,29 +348,54 @@ export function HistoryList({ records, settings }: HistoryListProps) {
 
                           <details className="text-xs text-slate-400">
                             <summary className="cursor-pointer hover:text-slate-300">
-                              Ver detalhamento de custos
+                              Ver detalhamento de custos e configuração
                             </summary>
-                            <div className="mt-2 space-y-1 pl-4 border-l-2 border-slate-700">
-                              <div className="flex justify-between">
-                                <span>Combustível:</span>
-                                <span>R$ {metrics.fuelCost.toFixed(2)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Manutenção:</span>
-                                <span>R$ {metrics.maintenanceCost.toFixed(2)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Taxa do App:</span>
-                                <span>R$ {metrics.appFees.toFixed(2)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Lava-jato (diário):</span>
-                                <span>R$ {metrics.carWashDaily.toFixed(2)}</span>
-                              </div>
-                              {metrics.paymentMachineFees > 0 && (
+                            <div className="mt-2 space-y-3">
+                              <div className="space-y-1 pl-4 border-l-2 border-slate-700">
+                                <h4 className="text-slate-300 font-semibold mb-1">Custos Operacionais:</h4>
                                 <div className="flex justify-between">
-                                  <span>Taxas Maquininha:</span>
-                                  <span>R$ {metrics.paymentMachineFees.toFixed(2)}</span>
+                                  <span>Combustível:</span>
+                                  <span>R$ {Number(record.fuel_cost || 0).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Manutenção:</span>
+                                  <span>R$ {Number(record.maintenance_cost || 0).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Taxa do App:</span>
+                                  <span>R$ {Number(record.app_fees || 0).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Lava-jato (diário):</span>
+                                  <span>R$ {Number(record.car_wash_cost || 0).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Taxa débito:</span>
+                                  <span>R$ {Number(record.debit_fee || 0).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Taxa crédito:</span>
+                                  <span>R$ {Number(record.credit_fee || 0).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>IPVA (diário):</span>
+                                  <span>R$ {Number(record.daily_ipva_cost || 0).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Seguro (diário):</span>
+                                  <span>R$ {Number(record.daily_insurance_cost || 0).toFixed(2)}</span>
+                                </div>
+                              </div>
+
+                              {record.config_version_id && (
+                                <div className="pl-4 border-l-2 border-emerald-700/50">
+                                  <div className="flex items-center gap-2 text-emerald-400/70">
+                                    <Settings className="h-3 w-3" />
+                                    <span className="text-xs">
+                                      Este registro usou a configuração válida na data e não será alterado por mudanças
+                                      futuras.
+                                    </span>
+                                  </div>
                                 </div>
                               )}
                             </div>

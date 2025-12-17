@@ -15,11 +15,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface RecordFormProps {
   initialData: any
-  settings: any
+  configVersion: any // Now receives the active config version for the date
   userId: string
 }
 
-export function RecordForm({ initialData, settings, userId }: RecordFormProps) {
+export function RecordForm({ initialData, configVersion, userId }: RecordFormProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,8 +46,8 @@ export function RecordForm({ initialData, settings, userId }: RecordFormProps) {
     const credit = Number.parseFloat(formData.received_credit) || 0
     const cashPix = Number.parseFloat(formData.received_cash_pix) || 0
 
-    const debitFee = (debit * (settings?.debit_fee_percent || 1.99)) / 100
-    const creditFee = (credit * (settings?.credit_fee_percent || 3.99)) / 100
+    const debitFee = (debit * (configVersion?.debit_fee_percent || 1.99)) / 100
+    const creditFee = (credit * (configVersion?.credit_fee_percent || 3.99)) / 100
 
     const netDebit = debit - debitFee
     const netCredit = credit - creditFee
@@ -86,21 +86,66 @@ export function RecordForm({ initialData, settings, userId }: RecordFormProps) {
     const supabase = createClient()
 
     try {
+      const kmDriven = Number.parseFloat(formData.km_driven)
+      const totalRides = Number.parseInt(formData.total_rides)
+      const grossRevenue = Number.parseFloat(formData.gross_revenue)
+      const personalExpenses = Number.parseFloat(formData.personal_expenses) || 0
+
+      // Fuel cost
+      const fuelCost = (kmDriven / configVersion.fuel_efficiency) * configVersion.gas_price
+
+      // Maintenance cost
+      const maintenanceCost = kmDriven * configVersion.maintenance_cost_per_km
+
+      // App fees
+      const appFees = totalRides * configVersion.app_fee_per_ride
+
+      // Car wash daily cost
+      const carWashCost = configVersion.monthly_car_wash / configVersion.avg_work_days_per_month
+
+      // Payment method fees
+      const debit = Number.parseFloat(formData.received_debit) || 0
+      const credit = Number.parseFloat(formData.received_credit) || 0
+      const debitFee = (debit * configVersion.debit_fee_percent) / 100
+      const creditFee = (credit * configVersion.credit_fee_percent) / 100
+
+      const dailyIpvaCost = configVersion.annual_ipva / configVersion.work_days_per_year
+      const dailyInsuranceCost = configVersion.annual_insurance / configVersion.work_days_per_year
+
+      const totalOperationalCosts =
+        fuelCost + maintenanceCost + appFees + carWashCost + debitFee + creditFee + dailyIpvaCost + dailyInsuranceCost
+
+      const operationalProfit = grossRevenue - totalOperationalCosts
+
+      const netProfit = operationalProfit - personalExpenses
+
       const dataToSave = {
         user_id: userId,
         record_date: formData.record_date,
-        gross_revenue: Number.parseFloat(formData.gross_revenue),
-        km_driven: Number.parseFloat(formData.km_driven),
-        total_rides: Number.parseInt(formData.total_rides),
+        gross_revenue: grossRevenue,
+        km_driven: kmDriven,
+        total_rides: totalRides,
         hours_online: formData.hours_online ? Number.parseFloat(formData.hours_online) : null,
         hours_working: formData.hours_working ? Number.parseFloat(formData.hours_working) : null,
         received_in_app: Number.parseFloat(formData.received_in_app) || 0,
         received_outside_app: Number.parseFloat(formData.received_outside_app) || 0,
-        received_debit: Number.parseFloat(formData.received_debit) || 0,
-        received_credit: Number.parseFloat(formData.received_credit) || 0,
+        received_debit: debit,
+        received_credit: credit,
         received_cash_pix: Number.parseFloat(formData.received_cash_pix) || 0,
-        personal_expenses: Number.parseFloat(formData.personal_expenses) || 0,
+        personal_expenses: personalExpenses,
         personal_expenses_description: formData.personal_expenses_description || null,
+        config_version_id: configVersion.id,
+        fuel_cost: fuelCost,
+        maintenance_cost: maintenanceCost,
+        app_fees: appFees,
+        car_wash_cost: carWashCost,
+        debit_fee: debitFee,
+        credit_fee: creditFee,
+        daily_ipva_cost: dailyIpvaCost,
+        daily_insurance_cost: dailyInsuranceCost,
+        total_operational_costs: totalOperationalCosts,
+        operational_profit: operationalProfit,
+        net_profit: netProfit,
       }
 
       if (initialData) {
@@ -260,7 +305,7 @@ export function RecordForm({ initialData, settings, userId }: RecordFormProps) {
                 }}
                 className="bg-slate-800 border-slate-700 text-white"
               />
-              {settings && <p className="text-xs text-slate-500">Taxa: {settings.debit_fee_percent}%</p>}
+              {configVersion && <p className="text-xs text-slate-500">Taxa: {configVersion.debit_fee_percent}%</p>}
             </div>
 
             <div className="space-y-2">
@@ -279,7 +324,7 @@ export function RecordForm({ initialData, settings, userId }: RecordFormProps) {
                 }}
                 className="bg-slate-800 border-slate-700 text-white"
               />
-              {settings && <p className="text-xs text-slate-500">Taxa: {settings.credit_fee_percent}%</p>}
+              {configVersion && <p className="text-xs text-slate-500">Taxa: {configVersion.credit_fee_percent}%</p>}
             </div>
 
             <div className="space-y-2">
