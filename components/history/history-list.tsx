@@ -16,11 +16,15 @@ import {
   Wallet,
   AlertCircle,
   Settings,
+  Info,
+  FileText,
 } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { HistoryFilters } from "./history-filters"
+import { classifyDayPerformance } from "@/lib/utils/classification"
+import { WeeklyReportModal } from "./weekly-report-modal"
 
 interface HistoryListProps {
   records: any[]
@@ -32,6 +36,8 @@ export function HistoryList({ records }: HistoryListProps) {
   const [filter, setFilter] = useState<"day" | "week" | "month" | "all" | "custom">("all")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
+  const [showPeriodCosts, setShowPeriodCosts] = useState<string | null>(null)
+  const [showWeeklyReport, setShowWeeklyReport] = useState(false)
 
   const filteredRecords = records.filter((record) => {
     const recordDate = new Date(record.record_date)
@@ -115,6 +121,7 @@ export function HistoryList({ records }: HistoryListProps) {
         startDate={startDate}
         endDate={endDate}
         onDateRangeChange={handleDateRangeChange}
+        onWeeklyReportClick={() => setShowWeeklyReport(true)}
       />
 
       {filteredRecords.length === 0 ? (
@@ -137,15 +144,49 @@ export function HistoryList({ records }: HistoryListProps) {
                   personalExpenses: acc.personalExpenses + (Number(r.personal_expenses) || 0),
                   realProfit: acc.realProfit + (Number(r.net_profit) || 0),
                   km: acc.km + (Number(r.km_driven) || 0),
+                  hoursOnline: acc.hoursOnline + (Number(r.hours_online) || 0),
+                  hoursWorking: acc.hoursWorking + (Number(r.hours_working) || 0),
+                  fuel: acc.fuel + (Number(r.fuel_cost) || 0),
+                  maintenance: acc.maintenance + (Number(r.maintenance_cost) || 0),
+                  appFees: acc.appFees + (Number(r.app_fees) || 0),
+                  carWash: acc.carWash + (Number(r.car_wash_cost) || 0),
+                  ipva: acc.ipva + (Number(r.daily_ipva_cost) || 0),
+                  insurance: acc.insurance + (Number(r.daily_insurance_cost) || 0),
                 }
               },
-              { grossRevenue: 0, totalCosts: 0, operationalProfit: 0, personalExpenses: 0, realProfit: 0, km: 0 },
+              {
+                grossRevenue: 0,
+                totalCosts: 0,
+                operationalProfit: 0,
+                personalExpenses: 0,
+                realProfit: 0,
+                km: 0,
+                hoursOnline: 0,
+                hoursWorking: 0,
+                fuel: 0,
+                maintenance: 0,
+                appFees: 0,
+                carWash: 0,
+                ipva: 0,
+                insurance: 0,
+              },
             )
 
             return (
               <div key={monthYear} className="space-y-4">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <h2 className="text-xl font-bold text-white capitalize">{monthYear}</h2>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-bold text-white capitalize">{monthYear}</h2>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowPeriodCosts(showPeriodCosts === monthYear ? null : monthYear)}
+                      className="text-slate-400 hover:text-white hover:bg-slate-700"
+                    >
+                      <Info className="h-4 w-4 mr-2" />
+                      Custos do Período
+                    </Button>
+                  </div>
                   <div className="flex flex-wrap gap-3 text-sm">
                     <span className="text-slate-400">
                       Faturamento:{" "}
@@ -174,8 +215,71 @@ export function HistoryList({ records }: HistoryListProps) {
                     <span className="text-slate-400">
                       KM: <span className="text-blue-400 font-semibold">{monthlyTotals.km.toFixed(1)}</span>
                     </span>
+                    {monthlyTotals.hoursOnline > 0 && (
+                      <span className="text-slate-400">
+                        H. Online:{" "}
+                        <span className="text-purple-400 font-semibold">{monthlyTotals.hoursOnline.toFixed(1)}h</span>
+                      </span>
+                    )}
+                    {monthlyTotals.hoursWorking > 0 && (
+                      <span className="text-slate-400">
+                        H. Trabalhadas:{" "}
+                        <span className="text-indigo-400 font-semibold">{monthlyTotals.hoursWorking.toFixed(1)}h</span>
+                      </span>
+                    )}
+                    {monthlyTotals.personalExpenses > 0 && (
+                      <span className="text-slate-400">
+                        Gastos Pessoais:{" "}
+                        <span className="text-amber-400 font-semibold">
+                          R$ {monthlyTotals.personalExpenses.toFixed(2)}
+                        </span>
+                      </span>
+                    )}
                   </div>
                 </div>
+
+                {showPeriodCosts === monthYear && (
+                  <Card className="border-slate-700 bg-slate-800/30 backdrop-blur">
+                    <CardContent className="p-4">
+                      <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Detalhamento de Custos - {monthYear}
+                      </h3>
+                      <div className="grid gap-2 text-sm">
+                        <div className="flex justify-between py-2 border-b border-slate-700">
+                          <span className="text-slate-400">Combustível:</span>
+                          <span className="text-white font-semibold">R$ {monthlyTotals.fuel.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-slate-700">
+                          <span className="text-slate-400">Manutenção:</span>
+                          <span className="text-white font-semibold">R$ {monthlyTotals.maintenance.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-slate-700">
+                          <span className="text-slate-400">Taxa do App:</span>
+                          <span className="text-white font-semibold">R$ {monthlyTotals.appFees.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-slate-700">
+                          <span className="text-slate-400">Lava-jato:</span>
+                          <span className="text-white font-semibold">R$ {monthlyTotals.carWash.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-slate-700">
+                          <span className="text-slate-400">IPVA:</span>
+                          <span className="text-white font-semibold">R$ {monthlyTotals.ipva.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-slate-700">
+                          <span className="text-slate-400">Seguro:</span>
+                          <span className="text-white font-semibold">R$ {monthlyTotals.insurance.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 pt-3 border-t-2 border-slate-600">
+                          <span className="text-slate-300 font-bold">Total de Custos:</span>
+                          <span className="text-red-400 font-bold text-base">
+                            R$ {monthlyTotals.totalCosts.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 <div className="grid gap-4">
                   {monthRecords.map((record) => {
@@ -183,31 +287,10 @@ export function HistoryList({ records }: HistoryListProps) {
                     const netProfit = Number(record.net_profit) || 0
                     const totalCosts = Number(record.total_operational_costs) || 0
 
-                    // Simple classification based on stored values
-                    const profitMargin = record.gross_revenue > 0 ? (operationalProfit / record.gross_revenue) * 100 : 0
-                    const profitPerKm = record.km_driven > 0 ? operationalProfit / record.km_driven : 0
-
-                    let classification = "Médio"
-                    let explanation = "Desempenho dentro da média."
-
-                    if (profitMargin >= 40 && profitPerKm > 3) {
-                      classification = "Bom"
-                      explanation = "Excelente margem de lucro e rentabilidade por km rodado."
-                    } else if (profitMargin < 30 || profitPerKm < 2) {
-                      classification = "Ruim"
-                      explanation = "Margem de lucro baixa. Considere revisar estratégia ou custos."
-                    }
-
-                    const classificationColors = {
-                      Bom: { badge: "bg-green-500/20 text-green-400 border-green-500/50", icon: "text-green-400" },
-                      Médio: {
-                        badge: "bg-yellow-500/20 text-yellow-400 border-yellow-500/50",
-                        icon: "text-yellow-400",
-                      },
-                      Ruim: { badge: "bg-red-500/20 text-red-400 border-red-500/50", icon: "text-red-400" },
-                    }
-
-                    const colors = classificationColors[classification as keyof typeof classificationColors]
+                    const { classification, explanation, colors } = classifyDayPerformance(
+                      record,
+                      monthRecords.filter((r) => r.id !== record.id),
+                    )
 
                     return (
                       <Card key={record.id} className="border-slate-700 bg-slate-800/50 backdrop-blur">
@@ -410,6 +493,7 @@ export function HistoryList({ records }: HistoryListProps) {
           })}
         </div>
       )}
+      <WeeklyReportModal isOpen={showWeeklyReport} onClose={() => setShowWeeklyReport(false)} records={records} />
     </div>
   )
 }

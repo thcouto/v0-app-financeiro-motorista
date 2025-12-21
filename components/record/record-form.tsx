@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface RecordFormProps {
   initialData: any
-  configVersion: any // Now receives the active config version for the date
+  configVersion: any
   userId: string
 }
 
@@ -27,17 +27,17 @@ export function RecordForm({ initialData, configVersion, userId }: RecordFormPro
 
   const [formData, setFormData] = useState({
     record_date: initialData?.record_date || new Date().toISOString().split("T")[0],
-    gross_revenue: initialData?.gross_revenue || "",
-    km_driven: initialData?.km_driven || "",
-    total_rides: initialData?.total_rides || "",
-    hours_online: initialData?.hours_online || "",
-    hours_working: initialData?.hours_working || "",
-    received_in_app: initialData?.received_in_app || "",
-    received_outside_app: initialData?.received_outside_app || "",
-    received_debit: initialData?.received_debit || "",
-    received_credit: initialData?.received_credit || "",
-    received_cash_pix: initialData?.received_cash_pix || "",
-    personal_expenses: initialData?.personal_expenses || "",
+    gross_revenue: initialData?.gross_revenue?.toString() || "",
+    km_driven: initialData?.km_driven?.toString() || "",
+    total_rides: initialData?.total_rides?.toString() || "",
+    hours_online: initialData?.hours_online?.toString() || "",
+    hours_working: initialData?.hours_working?.toString() || "",
+    received_in_app: initialData?.received_in_app?.toString() || "",
+    received_outside_app: initialData?.received_outside_app?.toString() || "",
+    received_debit: initialData?.received_debit?.toString() || "",
+    received_credit: initialData?.received_credit?.toString() || "",
+    received_cash_pix: initialData?.received_cash_pix?.toString() || "",
+    personal_expenses: initialData?.personal_expenses?.toString() || "",
     personal_expenses_description: initialData?.personal_expenses_description || "",
   })
 
@@ -56,7 +56,6 @@ export function RecordForm({ initialData, configVersion, userId }: RecordFormPro
     return { netDebit, netCredit, totalNet, debitFee, creditFee }
   }
 
-  // Validate received amounts
   const validateReceivedAmounts = () => {
     const gross = Number.parseFloat(formData.gross_revenue) || 0
     const { totalNet, debitFee, creditFee } = calculateNetAmounts()
@@ -91,19 +90,11 @@ export function RecordForm({ initialData, configVersion, userId }: RecordFormPro
       const grossRevenue = Number.parseFloat(formData.gross_revenue)
       const personalExpenses = Number.parseFloat(formData.personal_expenses) || 0
 
-      // Fuel cost
       const fuelCost = (kmDriven / configVersion.fuel_efficiency) * configVersion.gas_price
-
-      // Maintenance cost
       const maintenanceCost = kmDriven * configVersion.maintenance_cost_per_km
-
-      // App fees
       const appFees = totalRides * configVersion.app_fee_per_ride
-
-      // Car wash daily cost
       const carWashCost = configVersion.monthly_car_wash / configVersion.avg_work_days_per_month
 
-      // Payment method fees
       const debit = Number.parseFloat(formData.received_debit) || 0
       const credit = Number.parseFloat(formData.received_credit) || 0
       const debitFee = (debit * configVersion.debit_fee_percent) / 100
@@ -116,7 +107,6 @@ export function RecordForm({ initialData, configVersion, userId }: RecordFormPro
         fuelCost + maintenanceCost + appFees + carWashCost + debitFee + creditFee + dailyIpvaCost + dailyInsuranceCost
 
       const operationalProfit = grossRevenue - totalOperationalCosts
-
       const netProfit = operationalProfit - personalExpenses
 
       const dataToSave = {

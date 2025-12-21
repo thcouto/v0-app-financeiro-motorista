@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Calendar, CalendarDays, CalendarRange, CalendarClock } from "lucide-react"
+import { Calendar, CalendarDays, CalendarRange, CalendarClock, FileBarChart } from "lucide-react"
 
 interface HistoryFiltersProps {
   currentFilter: "day" | "week" | "month" | "all" | "custom"
@@ -11,6 +11,7 @@ interface HistoryFiltersProps {
   startDate?: string
   endDate?: string
   onDateRangeChange?: (start: string, end: string) => void
+  onWeeklyReportClick?: () => void
 }
 
 export function HistoryFilters({
@@ -19,6 +20,7 @@ export function HistoryFilters({
   startDate,
   endDate,
   onDateRangeChange,
+  onWeeklyReportClick,
 }: HistoryFiltersProps) {
   return (
     <div className="space-y-4">
@@ -82,6 +84,17 @@ export function HistoryFilters({
         >
           Todos
         </Button>
+
+        {onWeeklyReportClick && (
+          <Button
+            variant="outline"
+            onClick={onWeeklyReportClick}
+            className="border-blue-700 text-blue-400 hover:bg-blue-500/10 ml-auto bg-transparent"
+          >
+            <FileBarChart className="h-4 w-4 mr-2" />
+            Relatório Semanal
+          </Button>
+        )}
       </div>
 
       {currentFilter === "custom" && onDateRangeChange && (
